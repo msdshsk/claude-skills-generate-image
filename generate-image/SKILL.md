@@ -48,38 +48,73 @@ If it is empty or unset, inform the user:
 
 Do NOT proceed with image generation until this variable is confirmed.
 
-### 1. Clarify the user's intent
+### 1. Decompose the user's request
 
-Before generating, ensure the request is unambiguous. If any of the following are unclear, **ask the user before proceeding**:
+Every image request must be decomposed into three separate elements. If any element is unclear, **ask the user before proceeding**.
 
-- **What is being generated?** — Distinguish between "an image **of** X" vs "an image **to be used for** X". For example:
-  - "ヘッダ画像を作って" → Does the user want a header UI mockup, or a background/asset image to place behind a header?
-  - "アイコンを作って" → An icon graphic, or an app icon with rounded corners and specific dimensions?
-- **Where will the image be used?** — Web background, game asset, print, social media, etc. This determines aspect ratio, size, and style.
-- **Should the image contain text?** — If yes, what exact text? If no, ensure the prompt explicitly excludes UI elements like navigation bars, buttons, or placeholder text.
-- **Style and mood** — If not specified, ask or infer from context (e.g., a game project likely wants illustrated/stylized, a corporate site likely wants clean/professional).
+| Element | What it determines | Reflected in |
+|---------|-------------------|--------------|
+| **Content** — What to actually draw | The subject, scene, style, mood, composition | → Prompt text |
+| **Usage** — Where the image will be placed | The container/context it lives in | → Parameters (aspect-ratio, image-size) |
+| **Constraints** — Special requirements | Text overlay space, transparency, color restrictions, layout zones | → Prompt composition instructions |
+
+**Decomposition examples:**
+
+| User says | Content | Usage | Constraints |
+|-----------|---------|-------|-------------|
+| "Webヘッダ用の画像を作って" | (unclear — ask what scene/subject) | Web header background | Likely needs open space for text overlay |
+| "書籍のカバーデザインを作って" | (unclear — ask what scene/theme) | Book cover artwork | Needs space for title/author text |
+| "猫のアイコンを作って" | Cat illustration, simple/iconic | App icon or UI icon | Clean edges, works at small sizes |
+| "この立ち絵で海辺を走るシーンを" | Character running at seaside | (ask — game asset? wallpaper?) | Character consistency with reference |
+
+**Key question to always ask:** "What is the artwork itself?" — Separate from its container.
 
 ### 2. Select model
 
 - If Japanese text rendering or advanced quality is needed → preview model required → **ask user permission first** (training risk).
 - Otherwise → use default GA model.
 
-### 3. Craft an effective prompt
+### 3. Craft a content-only prompt
 
-**Language rule:** Write prompts in English. Only use the original language for proper nouns, titles, or text that must appear literally in the image (e.g., 「吾輩は猫である」). This produces the best results from Gemini.
+#### Critical rule: NEVER describe the container in the prompt
 
-**Accuracy rule:** Translate the user's intent precisely. Do not embellish or add elements the user did not request. Common pitfalls to avoid:
-- User asks for "background image for a header" → Do NOT generate a full UI mockup with navigation. Generate only the background artwork.
-- User asks for "a cat illustration" → Do NOT add text overlays or decorative frames unless requested.
-- User asks for "a logo" → Generate only the logo mark, not a full page layout containing the logo.
+The prompt must describe **only the artwork content** — what the viewer sees in the image. The usage/container determines parameters, NOT prompt text.
 
-Include in the prompt:
-- Subject description (what to generate)
-- Style direction (photorealistic, illustration, pixel art, flat design, etc.)
-- Composition details (framing, perspective, layout)
-- Color palette or mood if relevant
-- **Explicit exclusions** when needed (e.g., "no text overlays", "no UI elements", "artwork only")
-- For text that must appear in the image: specify the exact string and placement
+**Forbidden words in prompts** (these cause Gemini to generate UI mockups or physical objects instead of artwork):
+- `header`, `banner`, `hero image`, `website`, `web page`, `landing page`
+- `book cover`, `cover design`, `book jacket`
+- `app icon`, `UI element`, `button`, `navigation`, `menu`
+- `poster layout`, `flyer`, `brochure`
+- `mockup`, `template`, `frame`
+
+Instead, describe the **visual content** that would appear in those containers.
+
+**Transformation examples:**
+
+| User intent | NG prompt (container-polluted) | OK prompt (content-only) |
+|-------------|-------------------------------|--------------------------|
+| Webヘッダ背景 | "A web header banner for a literary site with a cat" | "Ink wash painting of a dignified cat silhouette gazing at distant mountains, traditional Japanese aesthetic, muted earthy tones, wide panoramic composition with generous open space on the right" |
+| 書籍カバー | "A book cover design for a fantasy novel" | "Dark enchanted forest with bioluminescent mushrooms, a narrow stone path winding into golden light, mysterious atmosphere, painterly fantasy illustration style, vertical composition with open sky area at top" |
+| アプリアイコン | "An app icon for a weather app with sun" | "Stylized golden sun with radiating rays, flat design, vivid orange-to-yellow gradient, centered composition on solid sky-blue background, clean geometric shapes" |
+| ゲーム背景 | "A game background for an RPG" | "Vast medieval grassland with scattered ancient ruins, distant snow-capped mountains under a dramatic cloudy sky, painterly style with rich greens and warm golden hour lighting" |
+
+#### Language rule
+
+Write prompts in English. Only use the original language for proper nouns, titles, or text that must appear literally in the image (e.g., 「吾輩は猫である」).
+
+#### Composition for constraints
+
+When the usage requires space for text overlay or UI elements, express this as **composition instructions**, not container references:
+- Need title space at top → "open sky area at top third of the composition"
+- Need text space on right → "subject positioned on the left, with generous negative space on the right"
+- Need center focus for icon → "centered composition, single subject, clean background"
+
+#### Always include explicit exclusions
+
+End every prompt with exclusions to prevent unwanted elements:
+- `"no text, no typography, no labels, no watermarks"` (unless text is specifically requested)
+- `"no UI elements, no frames, no borders, no mockup"` (for asset images)
+- `"artwork only, single illustration"` (to prevent multi-panel or collage output)
 
 ### 4. Execute the script
 
@@ -181,30 +216,64 @@ Output file path. Defaults to `generated_image.png`. Set a descriptive filename 
 
 ## Use Case Examples
 
-### Web App Assets (GA model — no permission needed)
+Each example shows the decomposition (Content / Usage / Constraints) and the resulting prompt.
+
+### Web Header Background
+
+- **Content**: Abstract gradient artwork
+- **Usage**: Web hero section background → `16:9`, `2K`
+- **Constraints**: Needs text overlay space on left
 
 ```bash
-# Hero banner
-node <script> --prompt "Modern gradient abstract background with soft blue and purple tones, minimal geometric shapes" --aspect-ratio 16:9 --image-size 2K --temperature 0.8 --output assets/hero-bg.png
-
-# Icon
-node <script> --prompt "Flat design settings gear icon, white on dark background, Material Design style" --aspect-ratio 1:1 --image-size 512 --temperature 0.3 --output assets/icon-settings.png
+node <script> --prompt "Smooth abstract gradient flowing from deep indigo to soft lavender, subtle geometric light streaks, atmospheric and modern, subject weight on the right side with generous open space on the left third. No text, no typography, no UI elements, artwork only." --aspect-ratio 16:9 --image-size 2K --temperature 0.8 --output assets/hero-bg.png
 ```
 
-### Game Sprites (GA model — no permission needed)
+### Book Cover Artwork
+
+- **Content**: Fantasy forest scene
+- **Usage**: Book cover print → `2:3`, `2K`
+- **Constraints**: Open area at top for title, bottom for author name
 
 ```bash
-node <script> --prompt "Pixel art RPG character warrior, front-facing, 32x32 style, transparent background" --aspect-ratio 1:1 --image-size 512 --temperature 0.5 --output sprites/warrior.png
+node <script> --prompt "Dark enchanted forest with bioluminescent mushrooms lining a narrow stone path, golden light glowing at the end of the path, mysterious and inviting atmosphere, painterly fantasy illustration style. Vertical composition with open misty sky area at the top third and a dark ground area at the bottom. No text, no typography, no frames, artwork only." --aspect-ratio 2:3 --image-size 2K --temperature 1.0 --output assets/book-cover-art.png
 ```
 
-### Japanese Text (Preview model — permission required)
+### App Icon
+
+- **Content**: Stylized sun graphic
+- **Usage**: App icon → `1:1`, `512`
+- **Constraints**: Must read clearly at small sizes
 
 ```bash
-node <script> --prompt "Japanese event poster with title 「夏祭り」 at top, fireworks background" --model gemini-3-pro-image-preview --aspect-ratio 3:4 --image-size 2K --output poster.png
+node <script> --prompt "Stylized golden sun with clean radiating rays, flat design, vivid orange-to-yellow gradient, perfectly centered on solid sky-blue background, clean geometric shapes, minimal detail, bold and simple. No text, no labels, no borders, single graphic only." --aspect-ratio 1:1 --image-size 512 --temperature 0.3 --output assets/icon-weather.png
 ```
 
-### Character Scene Variations (with reference image)
+### Game Sprite
+
+- **Content**: Pixel art warrior character
+- **Usage**: Game sprite asset → `1:1`, `512`
+- **Constraints**: Front-facing, clean edges
 
 ```bash
-node <script> --prompt "Generate this character sitting in a cozy café, warm lighting, same outfit" --reference-image character_ref.png --aspect-ratio 3:4 --image-size 2K --output scenes/cafe.png
+node <script> --prompt "Pixel art RPG warrior character, front-facing idle pose, 32x32 pixel style upscaled, steel armor with red cape, clean edges suitable for sprite sheet extraction, solid flat color background. No text, no frame, single character only." --aspect-ratio 1:1 --image-size 512 --temperature 0.5 --output sprites/warrior.png
+```
+
+### Japanese Text in Image (Preview — permission required)
+
+- **Content**: Summer festival scene with Japanese title text
+- **Usage**: Event promotional artwork → `3:4`, `2K`
+- **Constraints**: Text 「夏祭り」 must render correctly
+
+```bash
+node <script> --prompt "Vibrant summer night sky filled with colorful fireworks, traditional Japanese festival stalls visible below, warm lantern glow. Large calligraphic text 「夏祭り」 prominently displayed in the upper center. Festive and nostalgic atmosphere, illustration style. No UI elements, no borders, artwork only." --model gemini-3-pro-image-preview --aspect-ratio 3:4 --image-size 2K --output assets/natsu-matsuri.png
+```
+
+### Character Scene Variation (with reference image)
+
+- **Content**: Same character in a new scene
+- **Usage**: (depends on project context)
+- **Constraints**: Character consistency with reference
+
+```bash
+node <script> --prompt "The same girl from the reference image, running along a coastal road on a bright sunny day. Ocean on the left side, road stretching into the distance. Her hair and clothes flowing in the wind, dynamic running pose. Same outfit, hairstyle, and accessories as reference. Photorealistic style. No text, no UI elements, artwork only." --reference-image character_ref.png --aspect-ratio 16:9 --image-size 2K --output scenes/seaside-run.png
 ```
