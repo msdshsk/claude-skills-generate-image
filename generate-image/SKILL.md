@@ -50,24 +50,49 @@ Do NOT proceed with image generation until this variable is confirmed.
 
 ### 1. Decompose the user's request
 
-Every image request must be decomposed into three separate elements. If any element is unclear, **ask the user before proceeding**.
+Every image request is analyzed through two layers: **what to generate** and **how to deliver it**.
+
+#### Layer A: Content — The Five Visual Elements (Nano Banana framework)
+
+These five elements define the prompt text. Identify each from the user's request:
+
+| Element | What it controls | Prompt example |
+|---------|-----------------|----------------|
+| **Style** | Medium, aesthetic, art direction | "watercolor painting", "retro-futuristic 3D render", "photorealistic, 85mm lens" |
+| **Subject** | Who or what is in the image | "a sophisticated elderly woman wearing vintage Chanel" |
+| **Setting** | Environment, location, time | "rainy Tokyo street at night", "sun-drenched Tuscan vineyard" |
+| **Action** | What is happening, pose, motion | "speeding through", "gazing into the distance", "mid-leap" |
+| **Composition** | Camera angle, framing, layout | "cinematic wide shot", "close-up portrait", "bird's-eye view" |
+
+#### Layer B: Delivery — Parameters and Constraints
 
 | Element | What it determines | Reflected in |
 |---------|-------------------|--------------|
-| **Content** — What to actually draw | The subject, scene, style, mood, composition | → Prompt text |
-| **Usage** — Where the image will be placed | The container/context it lives in | → Parameters (aspect-ratio, image-size) |
-| **Constraints** — Special requirements | Text overlay space, transparency, color restrictions, layout zones | → Prompt composition instructions |
+| **Usage** — Where the image will be placed | The container/context | → Parameters (aspect-ratio, image-size, model) |
+| **Constraints** — Special requirements | Text overlay space, color restrictions, layout zones | → Composition instructions within the prompt |
 
-**Decomposition examples:**
+#### Interactive clarification flow
 
-| User says | Content | Usage | Constraints |
-|-----------|---------|-------|-------------|
-| "Webヘッダ用の画像を作って" | (unclear — ask what scene/subject) | Web header background | Likely needs open space for text overlay |
-| "書籍のカバーデザインを作って" | (unclear — ask what scene/theme) | Book cover artwork | Needs space for title/author text |
-| "猫のアイコンを作って" | Cat illustration, simple/iconic | App icon or UI icon | Clean edges, works at small sizes |
-| "この立ち絵で海辺を走るシーンを" | Character running at seaside | (ask — game asset? wallpaper?) | Character consistency with reference |
+When the user's request is ambiguous (missing 2+ visual elements), offer two paths:
 
-**Key question to always ask:** "What is the artwork itself?" — Separate from its container.
+**Option A — Guided questions:** Ask about missing elements using the five-element framework.
+> Example: 「スタイルは写真風・イラスト風どちらがいいですか？ 雰囲気は明るい感じ？ダーク？」
+
+**Option B — お任せ (full auto):** Infer all missing elements from conversation context, user history, and the most natural interpretation.
+> Example: 「お任せでよければ、会話の流れから〈水彩風の穏やかな雰囲気〉で進めますがいかがですか？」
+
+Present these options concisely — do NOT list all five elements as a questionnaire. Pick the 1-2 most impactful unknowns to ask about, or propose a complete vision for お任せ.
+
+**If the request is already clear** (e.g., "この立ち絵で海辺を走るシーンを"), skip clarification and proceed directly.
+
+#### Decomposition examples
+
+| User says | Five elements (inferred) | Delivery |
+|-----------|------------------------|----------|
+| "Webヘッダ用の画像を作って" | Style: ? / Subject: ? / Setting: ? / Action: ? / Composition: wide, open space left | Usage: 16:9 2K / Constraint: text overlay space |
+| "いい感じの猫の画像" | Style: ask or お任せ / Subject: cat / Setting: ask or お任せ / Action: ? / Composition: ? | Usage: ask |
+| "この立ち絵で海辺を走るシーンを" | Style: match reference / Subject: character from ref / Setting: coastal road / Action: running / Composition: dynamic | Usage: ask / Constraint: character consistency |
+| "サイバーパンクな街" | Style: cyberpunk, neon-lit / Subject: cityscape / Setting: futuristic city at night / Action: ambient city life / Composition: お任せ | Usage: ask |
 
 ### 2. Select model
 
@@ -75,6 +100,15 @@ Every image request must be decomposed into three separate elements. If any elem
 - Otherwise → use default GA model.
 
 ### 3. Craft a content-only prompt
+
+#### Core principle: Describe the scene, don't list keywords
+
+Nano Banana is built on deep language understanding. Write prompts as **natural, descriptive sentences**, not comma-separated keyword lists.
+
+| Approach | Example |
+|----------|---------|
+| **NG — keyword dump** | `dog, park, 4k, realistic, beautiful` |
+| **OK — scene description** | `A golden retriever bounding through a sun-dappled city park in late afternoon, autumn leaves swirling around its paws, shallow depth of field with warm bokeh background` |
 
 #### Critical rule: NEVER describe the container in the prompt
 
@@ -98,9 +132,33 @@ Instead, describe the **visual content** that would appear in those containers.
 | アプリアイコン | "An app icon for a weather app with sun" | "Stylized golden sun with radiating rays, flat design, vivid orange-to-yellow gradient, centered composition on solid sky-blue background, clean geometric shapes" |
 | ゲーム背景 | "A game background for an RPG" | "Vast medieval grassland with scattered ancient ruins, distant snow-capped mountains under a dramatic cloudy sky, painterly style with rich greens and warm golden hour lighting" |
 
+#### Five-element prompt structure
+
+Build prompts by weaving the five visual elements into natural sentences:
+
+```
+[Style] + [Subject] + [Setting] + [Action] + [Composition]
+```
+
+Example: `"Cinematic wide shot of a sophisticated elderly woman wearing vintage Chanel, walking through a rainy Tokyo street at night, reflections on wet asphalt, moody noir lighting with neon accents"`
+
+Every element doesn't need its own sentence — blend them naturally. Prioritize specificity on the elements that matter most for the user's intent.
+
+#### Prompting techniques
+
+| Technique | When to use | Example |
+|-----------|-------------|---------|
+| **Specificity over vagueness** | Always — materials, textures, atmosphere | "brushed steel with matte finish" not "metal" |
+| **HEX color codes** | When precise colors matter | `"sky gradient from #1a1a2e to #e94560"` |
+| **Photography terms** | For photorealistic images | "85mm f/1.4, golden hour, rule of thirds" |
+| **Contextual framing** | To set the overall quality bar | "Pulitzer Prize-winning photograph" or "Studio Ghibli background art" |
+| **ALL CAPS for emphasis** | For critical constraints (sparingly) | "MUST have exactly three characters" |
+| **Positive framing** | Always — describe what you want, not what you don't | "empty street" not "street with no cars" |
+| **Structured layout** | For complex multi-part scenes | Use markdown lists or JSON within the prompt |
+
 #### Language rule
 
-Write prompts in English. Only use the original language for proper nouns, titles, or text that must appear literally in the image (e.g., 「吾輩は猫である」).
+Write prompts in English. Only use the original language for proper nouns, titles, or text that must appear literally in the image (e.g., 「吾輩は猫である」). For text rendering, enclose desired words in quotation marks and specify typography: `bold calligraphic text "夏祭り" in the upper center`.
 
 #### Composition for constraints
 
@@ -115,6 +173,10 @@ End every prompt with exclusions to prevent unwanted elements:
 - `"no text, no typography, no labels, no watermarks"` (unless text is specifically requested)
 - `"no UI elements, no frames, no borders, no mockup"` (for asset images)
 - `"artwork only, single illustration"` (to prevent multi-panel or collage output)
+
+#### Edit, don't re-roll
+
+If a generated image is 80% correct, use **conversational follow-up** to refine rather than starting over. Describe what to change: "Change the lighting to sunset and make the background warmer." This preserves what already works.
 
 ### 4. Execute the script
 
@@ -144,6 +206,41 @@ Common post-processing scenarios:
 | PNG → JPEG for web (smaller filesize) | `--format jpeg --quality 85` |
 | PNG → WebP for modern web | `--format webp --quality 80` |
 | Combined: crop + resize + convert | `--crop-ratio 1:1 --resize-width 512 --format webp`|
+
+### 7. Background removal (rembg via Docker)
+
+Remove backgrounds from generated or existing images using `scripts/rembg-docker.mjs`. This runs rembg inside a Docker container — no Python environment setup needed on the host.
+
+**First run:** The Docker image is built automatically (~500MB download for Python + rembg + u2net model). Subsequent runs use the cached image.
+
+**Prerequisite:** Docker must be installed and running. Works on both Windows (Docker Desktop) and WSL.
+
+```bash
+node <skill-dir>/scripts/rembg-docker.mjs --input <image> --output <output.png> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--model <name>` | `u2net` (default, best quality), `u2netp` (lighter/faster), `isnet-general-use`, `silueta` |
+| `--alpha-matting` | Finer edge detection for hair, fur, translucent materials |
+| `--only-mask` | Output foreground mask only (white=keep, black=remove) |
+| `--bgcolor <R,G,B,A>` | Replace background with solid color (e.g., `255,255,255,255` for white) |
+
+Common background removal scenarios:
+
+| Scenario | Command |
+|----------|---------|
+| Transparent background (default) | `--input character.png --output character-nobg.png` |
+| White background | `--input photo.png --output photo-white.png --bgcolor 255,255,255,255` |
+| Fine edges (hair/fur) | `--input portrait.png --output portrait-nobg.png --alpha-matting` |
+| Extract mask for compositing | `--input scene.png --output mask.png --only-mask` |
+
+**Pipeline example:** Generate → Remove background → Resize for web
+```bash
+node <skill-dir>/scripts/generate-image.mjs --prompt "..." --output character.png
+node <skill-dir>/scripts/rembg-docker.mjs --input character.png --output character-nobg.png --alpha-matting
+node <skill-dir>/scripts/process-image.mjs --input character-nobg.png --output character-final.webp --resize-width 512 --format webp
+```
 
 ## Parameters Reference
 
