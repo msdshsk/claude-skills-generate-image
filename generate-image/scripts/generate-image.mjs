@@ -4,9 +4,7 @@
  * Gemini Image Generation Script
  * Zero external dependencies — uses Node.js built-in crypto and fetch.
  *
- * Endpoint routing:
- *   - GA models (no "-preview" suffix)      → Vertex AI (data NOT used for training)
- *   - Preview models ("-preview" suffix)     → Generative Language API (data MAY be used for training)
+ * All models use Vertex AI endpoint (data NOT used for training).
  *
  * Usage:
  *   node generate-image.mjs [options]
@@ -17,14 +15,14 @@
  * Options:
  *   --prompt <text>          Text prompt for image generation (required)
  *   --output <path>          Output file path (default: generated_image.png)
- *   --model <id>             Model ID (default: gemini-2.5-flash-image)
+ *   --model <id>             Model ID (default: gemini-3.1-flash-image-preview)
  *   --aspect-ratio <ratio>   1:1, 16:9, 9:16, 3:4, 4:3, 3:2, 2:3, 4:5, 5:4, 21:9
  *   --image-size <size>      512, 1K, 2K, 4K
  *   --temperature <n>        0.0–2.0 (default: 1.0)
  *   --top-p <n>              0.0–1.0 (default: 0.95)
  *   --response-modalities <m> Comma-separated: TEXT,IMAGE (default: IMAGE)
  *   --reference-image <path> Path(s) to reference image(s), comma-separated
- *   --region <region>        GCP region for Vertex AI (default: us-central1)
+ *   --region <region>        GCP region for Vertex AI (default: global)
  *   --config <json>          JSON string with all options
  */
 
@@ -33,25 +31,13 @@ import { createSign } from "node:crypto";
 import { resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
-// Model classification
+// Endpoint info (Vertex AI only)
 // ---------------------------------------------------------------------------
 
-function isPreviewModel(modelId) {
-  return modelId.includes("-preview");
-}
-
-function getEndpointInfo(modelId) {
-  if (isPreviewModel(modelId)) {
-    return {
-      type: "generative-language",
-      label: "Generative Language API (data may be used for training)",
-      trainingRisk: true,
-    };
-  }
+function getEndpointInfo() {
   return {
     type: "vertex",
     label: "Vertex AI (data NOT used for training)",
-    trainingRisk: false,
   };
 }
 
@@ -86,7 +72,7 @@ function buildConfig(raw) {
   return {
     prompt: raw.prompt ?? config.prompt,
     output: raw.output ?? config.output ?? "generated_image.png",
-    model: raw.model ?? config.model ?? "gemini-2.5-flash-image",
+    model: raw.model ?? config.model ?? "gemini-3.1-flash-image-preview",
     aspectRatio: raw["aspect-ratio"] ?? config.aspectRatio,
     imageSize: raw["image-size"] ?? config.imageSize,
     temperature: parseFloat(raw.temperature ?? config.temperature ?? "1.0"),
@@ -98,7 +84,7 @@ function buildConfig(raw) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
-    region: raw.region ?? config.region ?? "us-central1",
+    region: raw.region ?? config.region ?? "global",
   };
 }
 
@@ -120,19 +106,13 @@ function loadServiceAccount() {
   }
 }
 
-function createJwt(sa, endpointType) {
+function createJwt(sa) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
 
-  // Generative Language API requires its own scope
-  const scopes = ["https://www.googleapis.com/auth/cloud-platform"];
-  if (endpointType === "generative-language") {
-    scopes.push("https://www.googleapis.com/auth/generative-language");
-  }
-
   const payload = {
     iss: sa.client_email,
-    scope: scopes.join(" "),
+    scope: "https://www.googleapis.com/auth/cloud-platform",
     aud: "https://oauth2.googleapis.com/token",
     iat: now,
     exp: now + 3600,
@@ -150,8 +130,8 @@ function createJwt(sa, endpointType) {
   return `${unsigned}.${signature}`;
 }
 
-async function getAccessToken(sa, endpointType) {
-  const jwt = createJwt(sa, endpointType);
+async function getAccessToken(sa) {
+  const jwt = createJwt(sa);
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -175,11 +155,11 @@ async function getAccessToken(sa, endpointType) {
 // Build API request
 // ---------------------------------------------------------------------------
 
-function buildApiUrl(config, endpointInfo, sa) {
-  if (endpointInfo.type === "vertex") {
-    return `https://${config.region}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${config.region}/publishers/google/models/${config.model}:generateContent`;
-  }
-  return `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`;
+function buildApiUrl(config, sa) {
+  const host = config.region === "global"
+    ? "aiplatform.googleapis.com"
+    : `${config.region}-aiplatform.googleapis.com`;
+  return `https://${host}/v1/projects/${sa.project_id}/locations/${config.region}/publishers/google/models/${config.model}:generateContent`;
 }
 
 function buildRequestBody(config) {
@@ -240,25 +220,21 @@ function buildRequestBody(config) {
 
 async function generateImage(config) {
   const sa = loadServiceAccount();
-  const endpointInfo = getEndpointInfo(config.model);
+  const endpointInfo = getEndpointInfo();
 
-  // Output endpoint and training risk info to stderr for caller awareness
   console.error(`Model: ${config.model}`);
   console.error(`Endpoint: ${endpointInfo.label}`);
-  if (endpointInfo.trainingRisk) {
-    console.error(`⚠ WARNING: This is a preview model. Data sent to this API may be used for model training.`);
-    console.error(`⚠ Ensure user has granted permission before proceeding.`);
-  }
+  console.error(`Region: ${config.region}`);
 
   console.error(`Authenticating as ${sa.client_email}...`);
-  const token = await getAccessToken(sa, endpointInfo.type);
+  const token = await getAccessToken(sa);
 
-  const url = buildApiUrl(config, endpointInfo, sa);
+  const url = buildApiUrl(config, sa);
   const body = buildRequestBody(config);
 
   console.error(`Prompt: ${config.prompt.substring(0, 100)}${config.prompt.length > 100 ? "..." : ""}`);
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -266,6 +242,22 @@ async function generateImage(config) {
     },
     body: JSON.stringify(body),
   });
+
+  // Fallback: if -preview model returns 404, try without -preview suffix
+  if (res.status === 404 && config.model.endsWith("-preview")) {
+    const fallbackModel = config.model.replace(/-preview$/, "");
+    console.error(`Model ${config.model} returned 404. Trying ${fallbackModel}...`);
+    config.model = fallbackModel;
+    const fallbackUrl = buildApiUrl(config, sa);
+    res = await fetch(fallbackUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -326,7 +318,7 @@ async function generateImage(config) {
     output: resolve(config.output),
     model: config.model,
     endpoint: endpointInfo.type,
-    trainingRisk: endpointInfo.trainingRisk,
+    region: config.region,
   };
   if (textParts.length > 0) {
     result.text = textParts.join("\n");
@@ -348,19 +340,19 @@ Required:
 
 Options:
   --output <path>             Output file path (default: generated_image.png)
-  --model <id>                Model ID (default: gemini-2.5-flash-image)
+  --model <id>                Model ID (default: gemini-3.1-flash-image-preview)
   --aspect-ratio <ratio>      1:1, 16:9, 9:16, 3:4, 4:3, 3:2, 2:3, 4:5, 5:4, 21:9
   --image-size <size>         512, 1K, 2K, 4K
   --temperature <n>           0.0–2.0 (default: 1.0)
   --top-p <n>                 0.0–1.0 (default: 0.95)
   --response-modalities <m>   Comma-separated: TEXT,IMAGE (default: IMAGE)
   --reference-image <path>    Reference image path(s), comma-separated
-  --region <region>           GCP region for Vertex AI (default: us-central1)
+  --region <region>           GCP region for Vertex AI (default: global)
   --config <json>             JSON string with all options
 
-Model routing:
-  GA models (no -preview)     → Vertex AI (no training risk)
-  Preview models (-preview)   → Generative Language API (training risk)
+Models:
+  gemini-3.1-flash-image-preview      Nano Banana 2 (recommended)
+  gemini-3-pro-image-preview    Nano Banana Pro
 
 Environment:
   GEMINI_SECRET_PATH          Path to GCP service-account JSON key file`);

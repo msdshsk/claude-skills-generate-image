@@ -1,28 +1,40 @@
-# エンドポイントと学習リスクに関する注意事項
+# エンドポイントに関する注意事項
 
-## エンドポイントの切り分け
+## Vertex AI 一本化（2026-04-01 更新）
 
-スクリプトはモデルIDに基づいて自動的にエンドポイントをルーティングする。
+すべてのモデルは Vertex AI エンドポイント経由で利用する。
+**データはモデル学習に使用されない**（Vertex AI 利用規約による保証）。
 
-### Vertex AI（GAモデル）
-- 対象: `-preview` サフィックスが付かないモデル（例: `gemini-2.5-flash-image`）
-- エンドポイント: `{region}-aiplatform.googleapis.com/v1/`
-- **データはモデル学習に使用されない**（Vertex AI利用規約による保証）
+### 利用可能モデル
 
-### Generative Language API（Previewモデル）
-- 対象: `-preview` サフィックスが付くモデル（例: `gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`）
-- エンドポイント: `generativelanguage.googleapis.com/v1beta/`
-- **データがモデル学習に使用される可能性がある**（Google AI利用規約）
-- OAuthスコープに `generative-language` が追加で必要
+| Model ID | コードネーム | 備考 |
+|----------|-------------|------|
+| `gemini-3.1-flash-image-preview` | Nano Banana 2 | 推奨（デフォルト） |
+| `gemini-3-pro-image-preview` | Nano Banana Pro | 高品質版 |
 
-## 運用上の注意
+### エンドポイント
 
-- Previewモデルは日本語テキストの正確なレンダリングなど、GA版にない機能を持つ
-- しかし業務利用時は学習リスクがあるため、**必ずユーザーの明示的な許可を得てから使用すること**
-- GAモデルへの昇格が行われた場合、Vertex AIエンドポイントに切り替わり学習リスクは解消される
+- URL: `aiplatform.googleapis.com/v1/` （globalリージョン）
+- URL: `{region}-aiplatform.googleapis.com/v1/` （特定リージョン）
+- デフォルトリージョン: `global`
 
-## 経緯（2026-03-13時点）
+### 自動フォールバック
 
-- `gemini-3-pro-image-preview` および `gemini-3.1-flash-image-preview` はVertex AI (`/v1/` および `/v1beta1/`) ではアクセス不可（404）
+`-preview` モデルが404を返した場合、スクリプトは自動的に `-preview` なしのモデルIDでリトライする。
+これにより、GA昇格時にスキル側の変更なしで移行できる。
+
+例: `gemini-3.1-flash-image-preview` → 404 → `gemini-3.1-flash-image` でリトライ
+
+## 経緯
+
+### 2026-03-13 時点
+- `gemini-3-pro-image-preview` および `gemini-3.1-flash-image-preview` は Vertex AI ではアクセス不可（404）
 - 同モデルは Generative Language API (`/v1beta/`) でのみ利用可能
-- `gemini-2.5-flash-image` はVertex AI `/v1/` で利用可能
+- `gemini-2.5-flash-image` を GA モデルとして Vertex AI `/v1/` で利用
+
+### 2026-04-01 更新
+- `gemini-3.1-flash-image-preview` および `gemini-3-pro-image-preview` が Vertex AI (`global`) で利用可能に
+- Generative Language API ルーティングを廃止し、Vertex AI に一本化
+- リージョンを `global` に変更
+- `-preview` → 非preview の自動フォールバックロジック追加
+- ロールバックタグ: `v1.0-generative-language-api`

@@ -9,21 +9,18 @@ description: Generate images using Google Gemini image generation API. This skil
 
 This skill generates images via the Gemini image generation API (Nano Banana family). It supports text-to-image generation, reference image-based generation, and fine-grained control over output parameters. Authentication uses a GCP service-account JSON key referenced by the `GEMINI_SECRET_PATH` environment variable.
 
-## Important: Model Selection and Training Risk
+## Model Selection
 
-Models are classified into two categories with different data handling policies:
+All models use Vertex AI endpoint — data is NOT used for model training.
 
-| Category | Models | Training Risk | User Permission |
-|----------|--------|---------------|-----------------|
-| **GA** | `gemini-2.5-flash-image` | None (Vertex AI) | Not required |
-| **Preview** | `gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview` | **Data may be used for training** | **MUST obtain explicit user permission** |
+| Model ID | Codename | Recommended |
+|----------|----------|-------------|
+| `gemini-3.1-flash-image-preview` (default) | Nano Banana 2 | **Yes** — best balance of quality and speed |
+| `gemini-3-pro-image-preview` | Nano Banana Pro | Higher quality, slower |
 
-**Before using any preview model, always inform the user:**
-> "このモデル（{model名}）はpreview版のため、Generative Language API経由で実行されます。送信データがGoogleのモデル学習に使用される可能性があります。使用してよろしいですか？"
+Region: `global` (default). Can be changed with `--region` if needed.
 
-When the user has not granted permission or the content is sensitive/proprietary, default to the GA model `gemini-2.5-flash-image`.
-
-For details on endpoint routing, see `references/endpoint-notes.md`.
+**自動フォールバック:** `-preview` モデルが404を返した場合、スクリプトは自動的に `-preview` なしのモデルID（例: `gemini-3.1-flash-image`）でリトライする。GAモデルに昇格した際にスキル側の変更なしで移行できる。
 
 ## Script
 
@@ -96,8 +93,8 @@ Present these options concisely — do NOT list all five elements as a questionn
 
 ### 2. Select model
 
-- If Japanese text rendering or advanced quality is needed → preview model required → **ask user permission first** (training risk).
-- Otherwise → use default GA model.
+- Default: `gemini-3.1-flash-image-preview` (Nano Banana 2) — recommended for most tasks.
+- Use `gemini-3-pro-image-preview` (Nano Banana Pro) when higher quality is needed.
 
 ### 3. Craft a content-only prompt
 
@@ -155,6 +152,7 @@ Every element doesn't need its own sentence — blend them naturally. Prioritize
 | **ALL CAPS for emphasis** | For critical constraints (sparingly) | "MUST have exactly three characters" |
 | **Positive framing** | Always — describe what you want, not what you don't | "empty street" not "street with no cars" |
 | **Structured layout** | For complex multi-part scenes | Use markdown lists or JSON within the prompt |
+| **Infographic keyword** | ユーザーが「情報をまとめた画像」「情報のレポート」「データをビジュアル化」等の曖昧な表現をした場合 | プロンプトに "infographic" を明示的に含める（例: `"clean infographic showing quarterly sales trends"`) |
 
 #### Language rule
 
@@ -246,11 +244,10 @@ node <skill-dir>/scripts/process-image.mjs --input character-nobg.png --output c
 
 ### --model
 
-| Model ID | Category | Best For |
+| Model ID | Codename | Best For |
 |----------|----------|----------|
-| `gemini-2.5-flash-image` (default) | GA | Stable, no training risk |
-| `gemini-3-pro-image-preview` | Preview | High quality, 4K, Japanese text |
-| `gemini-3.1-flash-image-preview` | Preview | Latest quality, 4K, widest aspect ratios |
+| `gemini-3.1-flash-image-preview` (default) | Nano Banana 2 | Best balance of quality and speed |
+| `gemini-3-pro-image-preview` | Nano Banana Pro | Higher quality, 4K, Japanese text |
 
 ### --aspect-ratio
 
@@ -355,7 +352,7 @@ node <script> --prompt "Stylized golden sun with clean radiating rays, flat desi
 node <script> --prompt "Pixel art RPG warrior character, front-facing idle pose, 32x32 pixel style upscaled, steel armor with red cape, clean edges suitable for sprite sheet extraction, solid flat color background. No text, no frame, single character only." --aspect-ratio 1:1 --image-size 512 --temperature 0.5 --output sprites/warrior.png
 ```
 
-### Japanese Text in Image (Preview — permission required)
+### Japanese Text in Image
 
 - **Content**: Summer festival scene with Japanese title text
 - **Usage**: Event promotional artwork → `3:4`, `2K`
